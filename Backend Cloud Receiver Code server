@@ -1,0 +1,30 @@
+from fastapi import FastAPI, WebSocket
+import whisper
+import numpy as np
+import uvicorn
+
+app = FastAPI()
+
+print("Loading Whisper ASR Model...")
+model = whisper.load_model("tiny")
+
+@app.websocket("/ws/audio")
+async def handle_audio(websocket: WebSocket):
+    await websocket.accept()
+    print("ESP32 Stream Connected!")
+    
+    audio_data = bytearray()
+    try:
+        while True:
+            chunk = await websocket.receive_bytes()
+            audio_data.extend(chunk)
+    except:
+        print("Audio Stream Completed.")
+
+    pcm = np.frombuffer(audio_data, dtype=np.int16)
+    audio_float = pcm.astype(np.float32) / 32768.0
+    result = model.transcribe(audio_float)
+    print(f"Transcribed Result: '{result['text']}'")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
